@@ -61,6 +61,9 @@ WHITE  := $(shell tput -Txterm setaf 7)
 CYAN   := $(shell tput -Txterm setaf 6)
 RESET  := $(shell tput -Txterm sgr0)
 
+# Default Docker bridge IP
+E2E_BRIDGE_IP?=172.17.0.1
+
 ifndef UNAME_S
 UNAME_S := $(shell uname -s)
 endif
@@ -312,6 +315,19 @@ test: prepare test-models/testmodel grpcs
 	$(MAKE) test-llama-gguf
 	$(MAKE) test-tts
 	$(MAKE) test-stablediffusion
+
+prepare-e2e:
+	docker build --build-arg BUILD_TYPE=cublas --build-arg CUDA_MAJOR_VERSION=11 --build-arg CUDA_MINOR_VERSION=7 --build-arg FFMPEG=true -t localai-tests .
+	test -f ./tests/e2e-fixtures/ggllm-test-model.bin || wget -q https://huggingface.co/TheBloke/CodeLlama-7B-Instruct-GGUF/resolve/main/codellama-7b-instruct.Q2_K.gguf -O ./tests/e2e-fixtures/ggllm-test-model.bin
+	docker run -p 5390:8080 -ti --gpus all --name -d --rm -v $(abspath ./tests/e2e-fixtures):/models localai-tests
+
+test-e2e:
+	@echo 'Running e2e tests'
+	LOCALAI_API=http://$(E2E_BRIDGE_IP):5390 $(GOCMD) run github.com/onsi/ginkgo/v2/ginkgo --flake-attempts 5 -v -r ./tests/e2e
+
+teardown-e2e:
+	docker stop $$(docker ps -q --filter ancestor=localai-tests)
+	rm -rf ./tests/e2e-fixtures/ggllm-test-model.bin
 
 test-gpt4all: prepare-test
 	TEST_DIR=$(abspath ./)/test-dir/ FIXTURES=$(abspath ./)/tests/fixtures CONFIG_FILE=$(abspath ./)/test-models/config.yaml MODELS_PATH=$(abspath ./)/test-models \
