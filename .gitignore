@@ -43,3 +43,4 @@ prepare
 /ggml-metal.metal
 
 go.work*
+*.json.txt
