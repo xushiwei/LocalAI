@@ -41,3 +41,5 @@ release/
 backend-assets/
 prepare
 /ggml-metal.metal
+
+go.work*
